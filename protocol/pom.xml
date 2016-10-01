@@ -4,13 +4,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>net.md-5</groupId>
+        <groupId>fr.pandacube.bungeecord</groupId>
         <artifactId>bungeecord-parent</artifactId>
         <version>1.21-R0.4-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>net.md-5</groupId>
     <artifactId>bungeecord-protocol</artifactId>
     <version>1.21-R0.4-SNAPSHOT</version>
     <packaging>jar</packaging>
@@ -35,13 +34,13 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>net.md-5</groupId>
+            <groupId>fr.pandacube.bungeecord</groupId>
             <artifactId>bungeecord-serializer</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>net.md-5</groupId>
+            <groupId>fr.pandacube.bungeecord</groupId>
             <artifactId>bungeecord-nbt</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>

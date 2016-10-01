@@ -4,13 +4,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>net.md-5</groupId>
+        <groupId>fr.pandacube.bungeecord</groupId>
         <artifactId>bungeecord-parent</artifactId>
         <version>1.21-R0.4-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>net.md-5</groupId>
     <artifactId>bungeecord-bootstrap</artifactId>
     <version>1.21-R0.4-SNAPSHOT</version>
     <packaging>jar</packaging>
@@ -21,14 +20,12 @@
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.javadoc.skip>true</maven.javadoc.skip>
-        <maven.compiler.source>1.6</maven.compiler.source>
-        <maven.compiler.target>1.6</maven.compiler.target>
         <maven.build.timestamp.format>yyyyMMdd</maven.build.timestamp.format>
     </properties>
 
     <dependencies>
         <dependency>
-            <groupId>net.md-5</groupId>
+            <groupId>fr.pandacube.bungeecord</groupId>
             <artifactId>bungeecord-proxy</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>
@@ -36,7 +33,7 @@
     </dependencies>
 
     <build>
-        <finalName>BungeeCord</finalName>
+        <finalName>BungeeCord-${project.version}-${build.number}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

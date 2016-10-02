@@ -152,6 +152,15 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     private boolean transferred;
     private UserConnection userCon;
 
+    @Getter
+    private boolean duplication = false;
+
+    @Getter
+    private String realName = null;
+
+    @Getter
+    private UUID realId = null;
+
     @Override
     public boolean shouldHandle(PacketWrapper packet) throws Exception
     {
@@ -454,19 +463,12 @@ public class InitialHandler extends PacketHandler implements PendingConnection
         }
 
         this.loginRequest = loginRequest;
+        setName( realName = loginRequest.getData() );
 
         int limit = BungeeCord.getInstance().config.getPlayerLimit();
         if ( limit > 0 && bungee.getOnlineCount() >= limit )
         {
             disconnect( bungee.getTranslation( "proxy_full" ) );
-            return;
-        }
-
-        // If offline mode and they are already on, don't allow connect
-        // We can just check by UUID here as names are based on UUID
-        if ( !isOnlineMode() && bungee.getPlayer( getUniqueId() ) != null )
-        {
-            disconnect( bungee.getTranslation( "already_connected_proxy" ) );
             return;
         }
 
@@ -481,6 +483,16 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                     BaseComponent reason = result.getReason();
                     disconnect( ( reason != null ) ? reason : TextComponent.fromLegacy( bungee.getTranslation( "kick_message" ) ) );
                     return;
+                }
+                if ( !realName.equals( name ) )
+                {
+                    // Floodgate changes the name attribute with reflexion
+                    setName( realName = name );
+                }
+                if ( uniqueId != null )
+                {
+                    // if plugin called setUniqueId()
+                    realId = uniqueId;
                 }
                 if ( onlineMode )
                 {
@@ -538,8 +550,8 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                     if ( obj != null && obj.getId() != null )
                     {
                         loginProfile = obj;
-                        name = obj.getName();
-                        uniqueId = Util.getUUID( obj.getId() );
+                        setName( realName = obj.getName() );
+                        uniqueId = realId = Util.getUUID( obj.getId() );
                         finish();
                         return;
                     }
@@ -557,10 +569,25 @@ public class InitialHandler extends PacketHandler implements PendingConnection
 
     private void finish()
     {
-        offlineId = UUID.nameUUIDFromBytes( ( "OfflinePlayer:" + getName() ).getBytes( StandardCharsets.UTF_8 ) );
-        if ( uniqueId == null )
+        if ( uniqueId == null ) // offline mode and no plugin used setUniqueId()
         {
-            uniqueId = offlineId;
+            uniqueId = realId = offlineId;
+        }
+
+        /*
+         * At this point, player is either authenticated by Mojang (online mode),
+         * by a plugin (Floodgate ?) or the offline id is set.
+         */
+        ProxiedPlayer existingPlayer = bungee.getPlayer( uniqueId );
+        if ( existingPlayer != null && existingPlayer.hasPermission( "bungeecord.multiple_connect" ) )
+        {
+            UUID newId = generateDuplicatedId( uniqueId );
+            if ( !uniqueId.equals( newId ) )
+            {
+                uniqueId = newId;
+                setName( name + "." + getDuplicationIndex( newId ) );
+                duplication = true;
+            }
         }
         rewriteId = ( bungee.config.isIpForward() ) ? uniqueId : offlineId;
 
@@ -756,6 +783,59 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     public String getName()
     {
         return ( name != null ) ? name : ( loginRequest == null ) ? null : loginRequest.getData();
+    }
+
+    private void setName(String name)
+    {
+        this.name = name;
+        if ( loginRequest != null )
+        {
+            loginRequest.setData( name ); // name transmitted to Spigot server
+        }
+        updateOfflineId();
+    }
+
+    private UUID generateDuplicatedId(UUID base)
+    {
+        // UUID version: offline = 3 ; Java online mode = 4 ; Floodgate xUID = 0 (and must be kept 0)
+        // UUID variant: offline = 0xx ; Java online mode = 10x ; Floodgate xUID = xxx
+        if ( base.version() == 0 )
+        {
+            /*
+             * Floodgate’s xUID converted to UUID are not supported
+             * because it requires the 64 MSBs to be 0 (or Floodgate API would not
+             * recognize a Bedrock account) and we cannot modify the 64 LSBs
+             * without risking a collision with the xUID of another Bedrock account
+             */
+            return base;
+        }
+        long MSB = base.getMostSignificantBits();
+        long LSB = base.getLeastSignificantBits();
+
+        MSB &= 0xFFFFFFFF_FFFF_70FFL; // reset bits we need
+        MSB |= 0x00000000_0000_8000L; // set version to + 8 the current version
+
+        for ( int i = 1; i <= 9; i++ )
+        {
+            long newMSB = MSB | i << 8;
+            UUID newUUID = new UUID( newMSB, LSB );
+            if ( bungee.getPlayer( newUUID ) != null )
+            {
+                continue;
+            }
+            return newUUID;
+        }
+        return base; // there are too many duplicated connections for this player
+    }
+
+    private static int getDuplicationIndex(UUID duplicatedId)
+    {
+        return (int) ( duplicatedId.getMostSignificantBits() >> 8 ) & 0xF;
+    }
+
+    private void updateOfflineId()
+    {
+        offlineId = UUID.nameUUIDFromBytes( ( "OfflinePlayer:" + getName() ).getBytes( StandardCharsets.UTF_8 ) );
     }
 
     @Override

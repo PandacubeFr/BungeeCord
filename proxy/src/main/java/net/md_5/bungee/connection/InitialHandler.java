@@ -106,6 +106,17 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     @Getter
     private String extraDataInHandshake = "";
 
+    @Getter
+    private boolean duplication = false;
+
+    @Getter
+    private String realName = null;
+
+    @Getter
+    private UUID realId = null;
+
+    private String gameName = null;
+
     @Override
     public boolean shouldHandle(PacketWrapper packet) throws Exception
     {
@@ -353,6 +364,8 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     {
         Preconditions.checkState( thisState == State.USERNAME, "Not expecting USERNAME" );
         this.loginRequest = loginRequest;
+        this.realName = loginRequest.getData();
+        this.gameName = this.realName;
 
         if ( getName().contains( " " ) )
         {
@@ -367,9 +380,21 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             return;
         }
 
+        ProxiedPlayer existingPlayer = bungee.getPlayer( getName() );
+
+        duplication = ( existingPlayer != null && existingPlayer.hasPermission( "bungeecord.multiple_connect" ) );
+
+        if ( duplication )
+        {
+            gameName = generateDuplicatedName( realName );
+            this.loginRequest.setData( gameName ); // gameName transmitted to Spigot server
+        }
+
+        offlineId = UUID.nameUUIDFromBytes( ( "OfflinePlayer:" + gameName ).getBytes( Charsets.UTF_8 ) );
+
         // If offline mode and they are already on, don't allow connect
         // We can just check by UUID here as names are based on UUID
-        if ( !isOnlineMode() && bungee.getPlayer( getUniqueId() ) != null )
+        if ( !isOnlineMode() && bungee.getPlayer( offlineId ) != null && !duplication )
         {
             disconnect( bungee.getTranslation( "already_connected_proxy" ) );
             return;
@@ -416,7 +441,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
         BungeeCipher encrypt = EncryptionUtil.getCipher( true, sharedKey );
         ch.addBefore( PipelineUtils.FRAME_PREPENDER, PipelineUtils.ENCRYPT_HANDLER, new CipherEncoder( encrypt ) );
 
-        String encName = URLEncoder.encode( InitialHandler.this.getName(), "UTF-8" );
+        String encName = URLEncoder.encode( InitialHandler.this.realName, "UTF-8" );
 
         MessageDigest sha = MessageDigest.getInstance( "SHA-1" );
         for ( byte[] bit : new byte[][]
@@ -442,8 +467,10 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                     if ( obj != null && obj.getId() != null )
                     {
                         loginProfile = obj;
-                        name = obj.getName();
-                        uniqueId = Util.getUUID( obj.getId() );
+                        realName = obj.getName();
+                        realId = Util.getUUID( obj.getId() );
+                        if ( !duplication )
+                            uniqueId = realId;
                         finish();
                         return;
                     }
@@ -451,7 +478,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                 } else
                 {
                     disconnect( bungee.getTranslation( "mojang_fail" ) );
-                    bungee.getLogger().log( Level.SEVERE, "Error authenticating " + getName() + " with minecraft.net", error );
+                    bungee.getLogger().log( Level.SEVERE, "Error authenticating " + realName + " with minecraft.net", error );
                 }
             }
         };
@@ -461,6 +488,12 @@ public class InitialHandler extends PacketHandler implements PendingConnection
 
     private void finish()
     {
+
+        if ( uniqueId == null )
+        {
+            uniqueId = offlineId;
+        }
+
         if ( isOnlineMode() )
         {
             // Check for multiple connections
@@ -489,12 +522,6 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                 return;
             }
 
-        }
-
-        offlineId = UUID.nameUUIDFromBytes( ( "OfflinePlayer:" + getName() ).getBytes( Charsets.UTF_8 ) );
-        if ( uniqueId == null )
-        {
-            uniqueId = offlineId;
         }
 
         Callback<LoginEvent> complete = new Callback<LoginEvent>()
@@ -596,7 +623,22 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     @Override
     public String getName()
     {
-        return ( name != null ) ? name : ( loginRequest == null ) ? null : loginRequest.getData();
+        return gameName;
+    }
+
+    private String generateDuplicatedName(String original)
+    {
+        String newName;
+        int i = 0;
+        do
+        {
+            i++;
+            String strCount = Integer.toString( i );
+            if ( original.length() > 16 - strCount.length() )
+                original = original.substring( 0, 16 - strCount.length() );
+            newName = original + i;
+        } while ( bungee.getPlayer( newName ) != null );
+        return newName;
     }
 
     @Override

@@ -74,7 +74,6 @@ import net.md_5.bungee.jni.NativeCode;
 import net.md_5.bungee.log.BungeeLogger;
 import net.md_5.bungee.log.LoggingForwardHandler;
 import net.md_5.bungee.log.LoggingOutputStream;
-import net.md_5.bungee.module.ModuleManager;
 import net.md_5.bungee.netty.PipelineUtils;
 import net.md_5.bungee.protocol.DefinedPacket;
 import net.md_5.bungee.protocol.ProtocolConstants;
@@ -153,7 +152,6 @@ public class BungeeCord extends ProxyServer
     private final Logger logger;
     @Getter
     private ConnectionThrottle connectionThrottle;
-    private final ModuleManager moduleManager = new ModuleManager();
 
     {
         // TODO: Proper fallback when we interface the manager
@@ -277,10 +275,6 @@ public class BungeeCord extends ProxyServer
         }
 
         eventLoops = PipelineUtils.newEventLoopGroup( 0, new ThreadFactoryBuilder().setNameFormat( "Netty IO Thread #%1$d" ).build() );
-
-        File moduleDirectory = new File( "modules" );
-        moduleManager.load( this, moduleDirectory );
-        pluginManager.detectPlugins( moduleDirectory );
 
         pluginsFolder.mkdir();
         pluginManager.detectPlugins( pluginsFolder );

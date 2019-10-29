@@ -49,6 +49,7 @@ import jline.console.ConsoleReader;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.Synchronized;
+import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.CommandSender;
 import net.md_5.bungee.api.Favicon;
 import net.md_5.bungee.api.ProxyServer;
@@ -525,7 +526,7 @@ public class BungeeCord extends ProxyServer
     @Override
     public String getName()
     {
-        return "BungeeCord";
+        return ChatColor.YELLOW + "" + "[[" + ChatColor.GREEN + ChatColor.BOLD + "Pandacube" + ChatColor.YELLOW + "]]" + ChatColor.RESET;
     }
 
     @Override

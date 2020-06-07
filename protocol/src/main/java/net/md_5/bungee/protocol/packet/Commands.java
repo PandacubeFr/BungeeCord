@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.arguments.ArgumentType;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -303,7 +304,7 @@ public class Commands extends DefinedPacket
     }
 
     @Data
-    private static class ArgumentRegistry
+    public static class ArgumentRegistry
     {
 
         private static final Map<String, ArgumentSerializer> PROVIDERS = new HashMap<>();
@@ -329,18 +330,29 @@ public class Commands extends DefinedPacket
             {
             }
         };
-        private static final ArgumentSerializer<Boolean> BOOLEAN = new ArgumentSerializer<Boolean>()
+        private static final ProperArgumentSerializer<BoolArgumentType> BOOLEAN = new ProperArgumentSerializer<BoolArgumentType>()
         {
             @Override
-            protected Boolean read(ByteBuf buf)
+            protected BoolArgumentType read(ByteBuf buf)
             {
-                return buf.readBoolean();
+                return BoolArgumentType.bool();
             }
 
             @Override
-            protected void write(ByteBuf buf, Boolean t)
+            protected void write(ByteBuf buf, BoolArgumentType t)
             {
-                buf.writeBoolean( t );
+            }
+
+            @Override
+            protected int getIntKey()
+            {
+                return 0;
+            }
+
+            @Override
+            protected String getKey()
+            {
+                return "brigadier:bool";
             }
         };
         private static final ArgumentSerializer<Byte> BYTE = new ArgumentSerializer<Byte>()
@@ -357,7 +369,7 @@ public class Commands extends DefinedPacket
                 buf.writeByte( t );
             }
         };
-        private static final ArgumentSerializer<FloatArgumentType> FLOAT_RANGE = new ArgumentSerializer<FloatArgumentType>()
+        private static final ProperArgumentSerializer<FloatArgumentType> FLOAT_RANGE = new ProperArgumentSerializer<FloatArgumentType>()
         {
             @Override
             protected FloatArgumentType read(ByteBuf buf)
@@ -385,8 +397,20 @@ public class Commands extends DefinedPacket
                     buf.writeFloat( t.getMaximum() );
                 }
             }
+
+            @Override
+            protected int getIntKey()
+            {
+                return 1;
+            }
+
+            @Override
+            protected String getKey()
+            {
+                return "brigadier:float";
+            }
         };
-        private static final ArgumentSerializer<DoubleArgumentType> DOUBLE_RANGE = new ArgumentSerializer<DoubleArgumentType>()
+        private static final ProperArgumentSerializer<DoubleArgumentType> DOUBLE_RANGE = new ProperArgumentSerializer<DoubleArgumentType>()
         {
             @Override
             protected DoubleArgumentType read(ByteBuf buf)
@@ -414,8 +438,20 @@ public class Commands extends DefinedPacket
                     buf.writeDouble( t.getMaximum() );
                 }
             }
+
+            @Override
+            protected int getIntKey()
+            {
+                return 2;
+            }
+
+            @Override
+            protected String getKey()
+            {
+                return "brigadier:double";
+            }
         };
-        private static final ArgumentSerializer<IntegerArgumentType> INTEGER_RANGE = new ArgumentSerializer<IntegerArgumentType>()
+        private static final ProperArgumentSerializer<IntegerArgumentType> INTEGER_RANGE = new ProperArgumentSerializer<IntegerArgumentType>()
         {
             @Override
             protected IntegerArgumentType read(ByteBuf buf)
@@ -443,6 +479,18 @@ public class Commands extends DefinedPacket
                     buf.writeInt( t.getMaximum() );
                 }
             }
+
+            @Override
+            protected int getIntKey()
+            {
+                return 3;
+            }
+
+            @Override
+            protected String getKey()
+            {
+                return "brigadier:integer";
+            }
         };
         private static final ArgumentSerializer<Integer> INTEGER = new ArgumentSerializer<Integer>()
         {
@@ -458,7 +506,7 @@ public class Commands extends DefinedPacket
                 buf.writeInt( t );
             }
         };
-        private static final ArgumentSerializer<LongArgumentType> LONG_RANGE = new ArgumentSerializer<LongArgumentType>()
+        private static final ProperArgumentSerializer<LongArgumentType> LONG_RANGE = new ProperArgumentSerializer<LongArgumentType>()
         {
             @Override
             protected LongArgumentType read(ByteBuf buf)
@@ -485,6 +533,18 @@ public class Commands extends DefinedPacket
                 {
                     buf.writeLong( t.getMaximum() );
                 }
+            }
+
+            @Override
+            protected int getIntKey()
+            {
+                return 4;
+            }
+
+            @Override
+            protected String getKey()
+            {
+                return "brigadier:long";
             }
         };
         private static final ProperArgumentSerializer<StringArgumentType> STRING = new ProperArgumentSerializer<StringArgumentType>()
@@ -541,11 +601,20 @@ public class Commands extends DefinedPacket
 
         static
         {
-            register( "brigadier:bool", VOID );
+            register( "brigadier:bool", BOOLEAN );
+            PROPER_PROVIDERS.put( BoolArgumentType.class, BOOLEAN );
+
             register( "brigadier:float", FLOAT_RANGE );
+            PROPER_PROVIDERS.put( FloatArgumentType.class, FLOAT_RANGE );
+
             register( "brigadier:double", DOUBLE_RANGE );
+            PROPER_PROVIDERS.put( DoubleArgumentType.class, DOUBLE_RANGE );
+
             register( "brigadier:integer", INTEGER_RANGE );
-            register( "brigadier:long", LONG_RANGE );
+            PROPER_PROVIDERS.put( IntegerArgumentType.class, INTEGER_RANGE );
+
+            register( "brigadier:long", LONG_RANGE ); // 1.14+
+            PROPER_PROVIDERS.put( LongArgumentType.class, LONG_RANGE );
 
             register( "brigadier:string", STRING );
             PROPER_PROVIDERS.put( StringArgumentType.class, STRING );
@@ -992,6 +1061,404 @@ public class Commands extends DefinedPacket
             return serializer;
         }
 
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:entity}.
+         * @param singleEntity if the argument restrict to only one entity
+         * @param onlyPlayers if the argument restrict to players only
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftEntity(boolean singleEntity, boolean onlyPlayers)
+        {
+            byte flags = 0;
+            if ( singleEntity )
+            {
+                flags |= 1;
+            }
+            if ( onlyPlayers )
+            {
+                flags |= 2;
+            }
+
+            return minecraftArgumentType( "minecraft:entity", flags );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:game_profile}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftGameProfile()
+        {
+            return minecraftArgumentType( "minecraft:game_profile", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:block_pos}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftBlockPos()
+        {
+            return minecraftArgumentType( "minecraft:block_pos", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:column_pos}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftColumnPos()
+        {
+            return minecraftArgumentType( "minecraft:column_pos", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:vec3}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftVec3()
+        {
+            return minecraftArgumentType( "minecraft:vec3", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:vec2}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftVec2()
+        {
+            return minecraftArgumentType( "minecraft:vec2", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:block_state}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftBlockState()
+        {
+            return minecraftArgumentType( "minecraft:block_state", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:block_predicate}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftBlockPredicate()
+        {
+            return minecraftArgumentType( "minecraft:block_predicate", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:item_stack}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftItemStack()
+        {
+            return minecraftArgumentType( "minecraft:item_stack", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:item_predicate}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftItemPredicate()
+        {
+            return minecraftArgumentType( "minecraft:item_predicate", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:color}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftColor()
+        {
+            return minecraftArgumentType( "minecraft:color", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:component}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftComponent()
+        {
+            return minecraftArgumentType( "minecraft:component", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:message}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftMessage()
+        {
+            return minecraftArgumentType( "minecraft:message", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:nbt_compound_tag}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftNBTCompoundTag()
+        {
+            return minecraftArgumentType( "minecraft:nbt_compound_tag", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:nbt_tag}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftNBTTag()
+        {
+            return minecraftArgumentType( "minecraft:nbt_tag", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:nbt}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftNBT()
+        {
+            return minecraftArgumentType( "minecraft:nbt", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:nbt_path}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftNBTPath()
+        {
+            return minecraftArgumentType( "minecraft:nbt_path", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:objective}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftObjective()
+        {
+            return minecraftArgumentType( "minecraft:objective", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:objective_criteria}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftObjectiveCriteria()
+        {
+            return minecraftArgumentType( "minecraft:objective_criteria", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:operation}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftOperation()
+        {
+            return minecraftArgumentType( "minecraft:operation", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:particle}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftParticle()
+        {
+            return minecraftArgumentType( "minecraft:particle", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:rotation}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftRotation()
+        {
+            return minecraftArgumentType( "minecraft:rotation", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:scoreboard_slot}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftScoreboardSlot()
+        {
+            return minecraftArgumentType( "minecraft:scoreboard_slot", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:score_holder}.
+         * @param allowMultiple if the argument allows multiple entities
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftScoreHolder(boolean allowMultiple)
+        {
+            byte flags = 0;
+            if ( allowMultiple )
+            {
+                flags |= 1;
+            }
+
+            return minecraftArgumentType( "minecraft:score_holder", flags );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:swizzle}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftSwizzle()
+        {
+            return minecraftArgumentType( "minecraft:swizzle", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:team}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftTeam()
+        {
+            return minecraftArgumentType( "minecraft:team", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:item_slot}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftItemSlot()
+        {
+            return minecraftArgumentType( "minecraft:item_slot", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:resource_location}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftResourceLocation()
+        {
+            return minecraftArgumentType( "minecraft:resource_location", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:mob_effect}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftMobEffect()
+        {
+            return minecraftArgumentType( "minecraft:mob_effect", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:function}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftFunction()
+        {
+            return minecraftArgumentType( "minecraft:function", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:entity_anchor}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftEntityAnchor()
+        {
+            return minecraftArgumentType( "minecraft:entity_anchor", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:int_range}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftIntRange()
+        {
+            return minecraftArgumentType( "minecraft:int_range", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:float_range}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftFloatRange()
+        {
+            return minecraftArgumentType( "minecraft:float_range", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:item_enchantment}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftItemEnchantment()
+        {
+            return minecraftArgumentType( "minecraft:item_enchantment", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:entity_summon}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftEntitySummon()
+        {
+            return minecraftArgumentType( "minecraft:entity_summon", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:dimension}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftDimension()
+        {
+            return minecraftArgumentType( "minecraft:dimension", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:time}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftTime()
+        {
+            return minecraftArgumentType( "minecraft:time", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:uuid}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftUUID()
+        {
+            return minecraftArgumentType( "minecraft:uuid", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:angle}.
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftAngle()
+        {
+            return minecraftArgumentType( "minecraft:angle", null );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:resource}.
+         * @param rawString the raw string for the argument
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftResource(String rawString)
+        {
+            return minecraftArgumentType( "minecraft:resource", rawString );
+        }
+
+        /**
+         * Returns the Minecraft ArgumentType {@code minecraft:resource_or_tag}.
+         * @param rawString the raw string for the argument
+         * @return an ArgumentType instance
+         */
+        public static ArgumentType<?> minecraftResourceOrTag(String rawString)
+        {
+            return minecraftArgumentType( "minecraft:resource_or_tag", rawString );
+        }
+
+        private static ArgumentType<?> minecraftArgumentType(String key, Object rawValue)
+        {
+            ArgumentSerializer reader = PROVIDERS.get( key );
+            Preconditions.checkArgument( reader != null, "No provider for argument " + key );
+
+            return new DummyType( key, reader, rawValue );
+        }
+
         private static ArgumentType<?> read(ByteBuf buf, int protocolVersion)
         {
             Object key;
@@ -1127,9 +1594,13 @@ public class Commands extends DefinedPacket
 
         private static String getKey(SuggestionProvider<DummyProvider> provider)
         {
-            Preconditions.checkArgument( provider instanceof DummyProvider, "Non dummy provider " + provider );
+            Preconditions.checkNotNull( provider );
+            if ( provider instanceof DummyProvider )
+            {
+                return ( (DummyProvider) provider ).key;
+            }
 
-            return ( (DummyProvider) provider ).key;
+            return ( (DummyProvider) ASK_SERVER ).key;
         }
 
         @Data

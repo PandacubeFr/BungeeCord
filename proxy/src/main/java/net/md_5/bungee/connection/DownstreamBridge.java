@@ -6,6 +6,7 @@ import com.google.common.collect.Lists;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.StringRange;
@@ -19,9 +20,12 @@ import io.netty.channel.unix.DomainSocketAddress;
 import java.io.DataInput;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import net.md_5.bungee.ServerConnection;
@@ -35,6 +39,7 @@ import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.config.ServerInfo;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.connection.Server;
+import net.md_5.bungee.api.event.CommandsDeclareEvent;
 import net.md_5.bungee.api.event.PluginMessageEvent;
 import net.md_5.bungee.api.event.ServerConnectEvent;
 import net.md_5.bungee.api.event.ServerDisconnectEvent;
@@ -761,6 +766,11 @@ public class DownstreamBridge extends PacketHandler
     {
         boolean modified = false;
 
+        CommandsDeclareEvent commandsDeclareEvent = new CommandsDeclareEvent( server, con, commands.getRoot() );
+        bungee.getPluginManager().callEvent( commandsDeclareEvent );
+
+        modified = commandsDeclareEvent.isModified();
+
         for ( Map.Entry<String, Command> command : bungee.getPluginManager().getCommands() )
         {
             if ( !bungee.getDisabledCommands().contains( command.getKey() ) && commands.getRoot().getChild( command.getKey() ) == null && command.getValue().hasPermission( con ) )
@@ -777,9 +787,63 @@ public class DownstreamBridge extends PacketHandler
 
         if ( modified )
         {
+            commands.setRoot( (com.mojang.brigadier.tree.RootCommandNode) filterCommandNode( commands.getRoot(), new IdentityHashMap<>() ) );
             con.unsafe().sendPacket( commands );
             throw CancelSendSignal.INSTANCE;
         }
+    }
+
+    /*
+     * Create a deep copy of the provided command node but removes any node that are not accessible by the player
+     * (using {@link CommandNode#getRequirement()})
+     */
+    private CommandNode filterCommandNode(CommandNode source, IdentityHashMap<CommandNode, CommandNode> commandNodeMapping)
+    {
+        CommandNode dest;
+        if ( source instanceof com.mojang.brigadier.tree.RootCommandNode )
+        {
+            dest = new com.mojang.brigadier.tree.RootCommandNode();
+        } else
+        {
+            if ( source.getRequirement() != null )
+            {
+                try
+                {
+                    if ( !source.getRequirement().test( con ) )
+                    {
+                        commandNodeMapping.put( source, null );
+                        return null;
+                    }
+                } catch ( Throwable t )
+                {
+                    ProxyServer.getInstance().getLogger().log( Level.SEVERE, "Requirement test for command node " + source + " encountered an exception", t );
+                }
+            }
+
+            ArgumentBuilder destChildBuilder = source.createBuilder();
+            destChildBuilder.requires( sender -> true );
+            if ( destChildBuilder.getRedirect() != null )
+            {
+                if ( commandNodeMapping.containsKey( destChildBuilder.getRedirect() ) )
+                    destChildBuilder.redirect( commandNodeMapping.get( destChildBuilder.getRedirect() ) );
+                else
+                    destChildBuilder.redirect( filterCommandNode( destChildBuilder.getRedirect(), commandNodeMapping ) );
+            }
+
+            dest = destChildBuilder.build();
+        }
+
+        commandNodeMapping.put( source, dest );
+
+        for ( CommandNode sourceChild : (Collection<CommandNode>) source.getChildren() )
+        {
+            CommandNode destChild = filterCommandNode( sourceChild, commandNodeMapping );
+            if ( destChild == null )
+                continue;
+            dest.addChild( destChild );
+        }
+
+        return dest;
     }
 
     @Override

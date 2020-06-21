@@ -9,7 +9,9 @@ import net.md_5.bungee.api.plugin.Cancellable;
 
 /**
  * Event called when a player uses tab completion.
+ * @deprecated please use {@link TabCompleteRequestEvent} to support 1.13+ suggestions.
  */
+@Deprecated
 @Data
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)

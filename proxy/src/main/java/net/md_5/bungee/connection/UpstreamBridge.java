@@ -6,7 +6,6 @@ import com.mojang.brigadier.suggestion.Suggestion;
 import com.mojang.brigadier.suggestion.Suggestions;
 import io.netty.channel.Channel;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 import net.md_5.bungee.BungeeCord;
@@ -22,6 +21,7 @@ import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.event.PluginMessageEvent;
 import net.md_5.bungee.api.event.SettingsChangedEvent;
 import net.md_5.bungee.api.event.TabCompleteEvent;
+import net.md_5.bungee.api.event.TabCompleteRequestEvent;
 import net.md_5.bungee.entitymap.EntityMap;
 import net.md_5.bungee.forge.ForgeConstants;
 import net.md_5.bungee.netty.ChannelWrapper;
@@ -246,32 +246,42 @@ public class UpstreamBridge extends PacketHandler
         TabCompleteEvent tabCompleteEvent = new TabCompleteEvent( con, con.getServer(), tabComplete.getCursor(), suggestions );
         bungee.getPluginManager().callEvent( tabCompleteEvent );
 
-        if ( tabCompleteEvent.isCancelled() )
+        List<String> legacyResults = tabCompleteEvent.getSuggestions();
+
+        int start = tabComplete.getCursor().lastIndexOf( ' ' ) + 1;
+        int end = tabComplete.getCursor().length();
+        StringRange lastArgumentRange = StringRange.between( start, end );
+
+        List<Suggestion> brigadier = new ArrayList<>( legacyResults.size() );
+        for ( String s : legacyResults )
+        {
+            brigadier.add( new Suggestion( lastArgumentRange, s ) );
+        }
+
+        TabCompleteRequestEvent tabCompleteRequestEvent = new TabCompleteRequestEvent( con, con.getServer(), tabComplete.getCursor(), lastArgumentRange, new Suggestions( lastArgumentRange, brigadier ) );
+        tabCompleteRequestEvent.setCancelled( tabCompleteEvent.isCancelled() );
+        bungee.getPluginManager().callEvent( tabCompleteRequestEvent );
+
+        if ( tabCompleteRequestEvent.isCancelled() )
         {
             throw CancelSendSignal.INSTANCE;
         }
 
-        List<String> results = tabCompleteEvent.getSuggestions();
-        if ( !results.isEmpty() )
+        Suggestions brigadierResults = tabCompleteRequestEvent.getSuggestions();
+
+        if ( !brigadierResults.isEmpty() )
         {
-            // Unclear how to handle 1.13 commands at this point. Because we don't inject into the command packets we are unlikely to get this far unless
-            // Bungee plugins are adding results for commands they don't own anyway
             if ( con.getPendingConnection().getVersion() < ProtocolConstants.MINECRAFT_1_13 )
             {
+                List<String> results = new ArrayList<>( brigadierResults.getList().size() );
+                for ( Suggestion s : brigadierResults.getList() )
+                {
+                    results.add( s.getText() );
+                }
                 con.unsafe().sendPacket( new TabCompleteResponse( results ) );
             } else
             {
-                int start = tabComplete.getCursor().lastIndexOf( ' ' ) + 1;
-                int end = tabComplete.getCursor().length();
-                StringRange range = StringRange.between( start, end );
-
-                List<Suggestion> brigadier = new LinkedList<>();
-                for ( String s : results )
-                {
-                    brigadier.add( new Suggestion( range, s ) );
-                }
-
-                con.unsafe().sendPacket( new TabCompleteResponse( tabComplete.getTransactionId(), new Suggestions( range, brigadier ) ) );
+                con.unsafe().sendPacket( new TabCompleteResponse( tabComplete.getTransactionId(), brigadierResults ) );
             }
             throw CancelSendSignal.INSTANCE;
         }
